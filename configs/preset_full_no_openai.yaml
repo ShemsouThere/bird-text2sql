@@ -1,0 +1,31 @@
+# Full training preset without OpenAI-dependent features.
+# Keeps a full run (not smoke) while disabling steps that require OpenAI API.
+
+model:
+  # Use 7B for broader GPU compatibility; keep full sequence length.
+  name: "Qwen/Qwen2.5-Coder-7B-Instruct"
+  max_seq_length: 4096
+  load_in_4bit: true
+  torch_dtype: "float16"
+  bnb_4bit_compute_dtype: "float16"
+
+data:
+  # Disable GPT-based semantic filtering.
+  semantic_validation: false
+  # Remove CoT task generation (depends on GPT calls).
+  include_tasks:
+    - text2sql
+    - schema_linking
+    - sql_correction
+    - skeleton_extraction
+
+training:
+  # Avoid unsupported precision settings on older GPUs.
+  bf16: false
+  tf32: false
+  # Keep experiment tracking enabled.
+  wandb_project: "bird-text2sql"
+  wandb_run_name: "full-no-openai-sft"
+
+rl:
+  wandb_project: "bird-text2sql-rl"
