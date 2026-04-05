@@ -8,6 +8,8 @@ model:
   name: "Qwen/Qwen2.5-Coder-7B-Instruct"
   max_seq_length: 1024
   load_in_4bit: true
+  torch_dtype: "float16"
+  bnb_4bit_compute_dtype: "float16"
 
 data:
   # Hard cap: only process this many samples through the whole pipeline
@@ -38,6 +40,8 @@ training:
   eval_steps: 999999   # skip mid-training eval
   eval_samples: 2
   gradient_checkpointing: false
+  bf16: false
+  tf32: false
   wandb_project: null  # disable wandb for smoke test
 
 rl:

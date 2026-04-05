@@ -495,6 +495,50 @@ class SFTTrainingPipeline:
 
         # max_steps overrides num_epochs when set (useful for smoke tests)
         max_steps = self.training_cfg.get("max_steps", -1)
+        requested_bf16 = bool(self.training_cfg.get("bf16", True))
+        requested_tf32 = bool(self.training_cfg.get("tf32", True))
+        use_fp16 = bool(self.training_cfg.get("fp16", False))
+
+        cuda_available = torch.cuda.is_available()
+        supports_bf16 = bool(
+            cuda_available
+            and hasattr(torch.cuda, "is_bf16_supported")
+            and torch.cuda.is_bf16_supported()
+        )
+        supports_tf32 = bool(
+            cuda_available and torch.cuda.get_device_capability(0)[0] >= 8
+        )
+
+        use_bf16 = requested_bf16 and supports_bf16
+        use_tf32 = requested_tf32 and supports_tf32
+
+        if requested_bf16 and not supports_bf16:
+            self.logger.warning(
+                "bf16 requested but not supported on this GPU; disabling bf16"
+            )
+            console.print(
+                "[yellow]bf16 not supported on this GPU; disabling bf16.[/yellow]"
+            )
+            if not use_fp16 and cuda_available:
+                use_fp16 = True
+                self.logger.info("Falling back to fp16")
+                console.print("[yellow]Falling back to fp16.[/yellow]")
+
+        if requested_tf32 and not supports_tf32:
+            self.logger.warning(
+                "tf32 requested but not supported on this GPU; disabling tf32"
+            )
+            console.print(
+                "[yellow]tf32 not supported on this GPU; disabling tf32.[/yellow]"
+            )
+
+        if use_fp16 and not cuda_available:
+            use_fp16 = False
+            self.logger.warning("fp16 requested without CUDA; disabling fp16")
+
+        if use_bf16 and use_fp16:
+            # HuggingFace TrainingArguments requires only one mixed-precision mode.
+            use_fp16 = False
 
         training_args = TrainingArguments(
             output_dir=str(self.output_dir),
@@ -508,8 +552,9 @@ class SFTTrainingPipeline:
             lr_scheduler_type=self.training_cfg.get("lr_scheduler_type", "cosine"),
             max_grad_norm=self.training_cfg.get("max_grad_norm", 1.0),
             gradient_checkpointing=self.training_cfg.get("gradient_checkpointing", True),
-            bf16=self.training_cfg.get("bf16", True),
-            tf32=self.training_cfg.get("tf32", True),
+            bf16=use_bf16,
+            fp16=use_fp16,
+            tf32=use_tf32,
             dataloader_num_workers=self.training_cfg.get("dataloader_num_workers", 4),
             save_strategy=self.training_cfg.get("save_strategy", "steps"),
             save_steps=self.training_cfg.get("save_steps", 500),
