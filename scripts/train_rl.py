@@ -760,14 +760,25 @@ class RLTrainingPipeline:
         set_seed(seed)
         self.logger.info(f"Random seed: {seed}")
 
-        # wandb
+        # wandb (optional)
         wandb_project = self.rl_cfg.get("wandb_project", "bird-text2sql-rl")
-        wandb.init(
-            project=wandb_project,
-            name=f"grpo-{time.strftime('%Y%m%d_%H%M%S')}",
-            config=self.config,
-            reinit=True,
-        )
+        if wandb_project:
+            try:
+                wandb.init(
+                    project=wandb_project,
+                    name=f"grpo-{time.strftime('%Y%m%d_%H%M%S')}",
+                    config=self.config,
+                    reinit=True,
+                )
+            except Exception as exc:
+                self.logger.warning(
+                    f"wandb init failed ({exc}); continuing without wandb logging"
+                )
+                console.print(
+                    "[yellow]W&B init failed; continuing without W&B logging.[/yellow]"
+                )
+        else:
+            self.logger.info("wandb disabled (rl.wandb_project is null/empty)")
 
         # ----------------------------------------------------------
         # Load models
@@ -993,7 +1004,7 @@ class RLTrainingPipeline:
                                 }
 
                                 # Reward distribution histogram
-                                if all_rewards:
+                                if all_rewards and wandb.run is not None:
                                     log_dict["train/reward_histogram"] = wandb.Histogram(
                                         all_rewards[-1000:]
                                     )
@@ -1041,7 +1052,8 @@ class RLTrainingPipeline:
             tokenizer.save_pretrained(str(interrupt_dir))
             self.logger.info(f"Interrupted checkpoint saved to {interrupt_dir}")
             console.print(f"[yellow]Checkpoint saved to {interrupt_dir}[/yellow]")
-            wandb.finish()
+            if wandb.run is not None:
+                wandb.finish()
             return
 
         except RuntimeError as exc:
@@ -1105,7 +1117,8 @@ class RLTrainingPipeline:
             console.print(f"  Mean reward: {mean_reward:.4f}")
             console.print(f"  Mean diversity: {collapse_monitor.mean_diversity:.3f}")
 
-        wandb.finish()
+        if wandb.run is not None:
+            wandb.finish()
 
 
 # ---------------------------------------------------------------------------

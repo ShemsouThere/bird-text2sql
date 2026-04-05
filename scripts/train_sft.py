@@ -564,16 +564,27 @@ class SFTTrainingPipeline:
         set_seed(seed)
         self.logger.info(f"Random seed: {seed}")
 
-        # wandb
+        # wandb (optional)
         wandb_project = self.training_cfg.get("wandb_project", "bird-text2sql")
         wandb_run_name = self.training_cfg.get("wandb_run_name", "sft-text2sql")
-        wandb.init(
-            project=wandb_project,
-            name=wandb_run_name,
-            config=self.config,
-            reinit=True,
-        )
-        self.logger.info(f"wandb project={wandb_project} run={wandb_run_name}")
+        if wandb_project:
+            try:
+                wandb.init(
+                    project=wandb_project,
+                    name=wandb_run_name,
+                    config=self.config,
+                    reinit=True,
+                )
+                self.logger.info(f"wandb project={wandb_project} run={wandb_run_name}")
+            except Exception as exc:
+                self.logger.warning(
+                    f"wandb init failed ({exc}); continuing without wandb logging"
+                )
+                console.print(
+                    "[yellow]W&B init failed; continuing without W&B logging.[/yellow]"
+                )
+        else:
+            self.logger.info("wandb disabled (training.wandb_project is null/empty)")
 
         # Load model
         loader = ModelLoader(self.config)
@@ -673,7 +684,8 @@ class SFTTrainingPipeline:
         console.print(f"[bold green]Training completed in {format_time(elapsed)}[/bold green]")
         console.print(f"  Final checkpoint: {final_dir}")
 
-        wandb.finish()
+        if wandb.run is not None:
+            wandb.finish()
 
 
 # ---------------------------------------------------------------------------
