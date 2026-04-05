@@ -1,0 +1,159 @@
+# Bird Text-to-SQL Configuration
+
+model:
+  name: "Qwen/Qwen2.5-Coder-14B-Instruct"
+  fallback_name: "Qwen/Qwen2.5-Coder-7B-Instruct"
+  max_seq_length: 4096
+  torch_dtype: "bfloat16"
+  load_in_4bit: true
+  bnb_4bit_compute_dtype: "bfloat16"
+  bnb_4bit_quant_type: "nf4"
+  use_double_quant: true
+  trust_remote_code: true
+  attn_implementation: "flash_attention_2"  # Falls back to eager if not available
+
+data:
+  bird_train_path: "./data/raw/train"
+  bird_dev_path: "./data/raw/dev"
+  db_base_path: "./data/raw"
+  clean_dir: "./data/clean"
+  multitask_dir: "./data/multitask"
+  schema_dir: "./data/schemas"
+  cache_dir: "./data/cache"
+
+  # Cleaning
+  execution_timeout: 30
+  max_workers: 8
+  semantic_validation: true
+  semantic_confidence_threshold: 0.7
+  min_samples_after_cleaning: 5000
+
+  # Dataset building
+  schema_format: "ddl"  # "ddl" or "light"
+  include_tasks:
+    - text2sql
+    - schema_linking
+    - sql_correction
+    - chain_of_thought
+    - skeleton_extraction
+  cot_join_threshold: 2
+  cot_subquery: true
+  error_types:
+    - column_swap
+    - table_alias
+    - wrong_aggregation
+    - missing_condition
+    - wrong_join_type
+    - wrong_operator
+    - missing_distinct
+    - wrong_order
+  max_correction_attempts: 5
+  deduplication: true
+
+training:
+  seed: 42
+  output_dir: "./models/sft"
+  log_dir: "./logs"
+
+  # LoRA
+  lora_rank: 64
+  lora_alpha: 128
+  lora_dropout: 0.05
+  lora_target_modules:
+    - "q_proj"
+    - "k_proj"
+    - "v_proj"
+    - "o_proj"
+    - "gate_proj"
+    - "up_proj"
+    - "down_proj"
+
+  # Training hyperparams
+  num_epochs: 3
+  per_device_batch_size: 2
+  gradient_accumulation_steps: 8
+  learning_rate: 2.0e-4
+  weight_decay: 0.01
+  warmup_ratio: 0.05
+  lr_scheduler_type: "cosine"
+  max_grad_norm: 1.0
+
+  # Optimization
+  gradient_checkpointing: true
+  bf16: true
+  tf32: true
+  dataloader_num_workers: 4
+
+  # Saving
+  save_strategy: "steps"
+  save_steps: 500
+  save_total_limit: 3
+  eval_steps: 500
+  eval_samples: 100
+
+  # WandB
+  wandb_project: "bird-text2sql"
+  wandb_run_name: null  # Auto-generated if null
+
+rl:
+  output_dir: "./models/rl"
+  num_epochs: 1
+  per_device_batch_size: 2
+  gradient_accumulation_steps: 4
+  learning_rate: 5.0e-6
+  num_candidates: 8
+  num_rollouts: 8
+  max_new_tokens: 512
+  temperature: 0.8
+  kl_coeff: 0.05
+  reward_correct: 1.0
+  reward_executable: 0.1
+  reward_error: 0.0
+  reward_table_bonus: 0.05
+  lora_rank: 32
+  lora_alpha: 64
+  collapse_threshold: 0.1  # Alert if diversity drops below this
+  wandb_project: "bird-text2sql-rl"
+
+inference:
+  model_path: "./models/final"
+  max_new_tokens: 512
+  temperature: 0.1
+  top_p: 0.95
+  num_candidates: 8
+
+  # ICL settings
+  num_examples: 3
+  icl_styles:
+    - "direct"
+    - "cot"
+    - "divide_and_conquer"
+
+  # Refinement
+  max_refinement_rounds: 2
+  fix_syntax_errors: true
+  fix_semantic_errors: false
+
+  # Selection
+  selection_method: "tournament"  # "tournament" or "self_consistency"
+
+  # ChromaDB
+  chroma_persist_dir: "./data/cache/chroma"
+
+  # Batch processing
+  batch_size: 16
+
+evaluation:
+  dev_path: "./data/raw/dev"
+  db_base_path: "./data/raw"
+  output_dir: "./evaluation"
+  execution_timeout: 30
+  difficulties:
+    - "simple"
+    - "moderate"
+    - "challenging"
+
+serve:
+  host: "0.0.0.0"
+  port: 8000
+  log_level: "info"

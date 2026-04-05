@@ -1,0 +1,19 @@
+# Preset overrides for Qwen2.5-Coder-7B-Instruct
+model:
+  name: "Qwen/Qwen2.5-Coder-7B-Instruct"
+  max_seq_length: 3072
+
+training:
+  lora_rank: 32
+  lora_alpha: 64
+  per_device_batch_size: 4
+  gradient_accumulation_steps: 4
+
+rl:
+  num_candidates: 6
+  num_rollouts: 6
+  per_device_batch_size: 4
+  gradient_accumulation_steps: 2
+
+inference:
+  num_candidates: 6
