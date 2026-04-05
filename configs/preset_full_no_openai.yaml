@@ -10,6 +10,11 @@ model:
   bnb_4bit_compute_dtype: "float16"
 
 data:
+  # Use dedicated directories so this run does not reuse smoke checkpoints.
+  clean_dir: "./data/clean_full_no_openai"
+  multitask_dir: "./data/multitask_full_no_openai"
+  schema_dir: "./data/schemas_full_no_openai"
+  max_samples: null
   # Disable GPT-based semantic filtering.
   semantic_validation: false
   # Remove CoT task generation (depends on GPT calls).
@@ -20,6 +25,7 @@ data:
     - skeleton_extraction
 
 training:
+  output_dir: "./models/sft_full_no_openai"
   # Avoid unsupported precision settings on older GPUs.
   bf16: false
   tf32: false
@@ -28,4 +34,11 @@ training:
   wandb_run_name: "full-no-openai-sft"
 
 rl:
+  output_dir: "./models/rl_full_no_openai"
   wandb_project: "bird-text2sql-rl"
+
+inference:
+  model_path: "./models/final_full_no_openai"
+
+evaluation:
+  output_dir: "./evaluation_full_no_openai"
