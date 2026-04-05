@@ -100,6 +100,13 @@ class BIRDDataLoader:
             skipped_invalid,
             skipped_no_db,
         )
+
+        # Optional hard cap for smoke tests / fast iteration
+        max_samples = self.config.get("data", {}).get("max_samples", None)
+        if max_samples and len(validated) > max_samples:
+            logger.info("Capping dataset to %d samples (max_samples setting)", max_samples)
+            validated = validated[:max_samples]
+
         return validated
 
     # -- internals ----------------------------------------------------------

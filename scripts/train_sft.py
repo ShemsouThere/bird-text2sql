@@ -493,9 +493,13 @@ class SFTTrainingPipeline:
     ) -> Trainer:
         """Create a HuggingFace Trainer with all training arguments."""
 
+        # max_steps overrides num_epochs when set (useful for smoke tests)
+        max_steps = self.training_cfg.get("max_steps", -1)
+
         training_args = TrainingArguments(
             output_dir=str(self.output_dir),
             num_train_epochs=self.training_cfg.get("num_epochs", 3),
+            max_steps=max_steps,
             per_device_train_batch_size=self.training_cfg.get("per_device_batch_size", 2),
             gradient_accumulation_steps=self.training_cfg.get("gradient_accumulation_steps", 8),
             learning_rate=self.training_cfg.get("learning_rate", 2e-4),
@@ -511,8 +515,8 @@ class SFTTrainingPipeline:
             save_steps=self.training_cfg.get("save_steps", 500),
             save_total_limit=self.training_cfg.get("save_total_limit", 3),
             logging_dir=str(self.log_dir),
-            logging_steps=10,
-            report_to="wandb",
+            logging_steps=1,
+            report_to="wandb" if self.training_cfg.get("wandb_project") else "none",
             run_name=self.training_cfg.get("wandb_run_name", "sft-text2sql"),
             seed=self.training_cfg.get("seed", 42),
             remove_unused_columns=False,

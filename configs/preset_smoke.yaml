@@ -1,0 +1,59 @@
+# Smoke-test preset — runs the entire pipeline end-to-end in minutes.
+# Use this to verify nothing is broken before a real training run.
+#
+# Usage:
+#   bash run_pipeline.sh --preset configs/preset_smoke.yaml --skip-to clean-data
+
+model:
+  name: "Qwen/Qwen2.5-Coder-7B-Instruct"
+  max_seq_length: 1024
+  load_in_4bit: true
+
+data:
+  # Hard cap: only process this many samples through the whole pipeline
+  max_samples: 20
+  # Disable the two features that require OpenAI
+  semantic_validation: false
+  # Only build the simplest task (fastest, no GPT-4o needed)
+  include_tasks:
+    - text2sql
+  # Fewer error types to inject (faster dataset build)
+  error_types:
+    - wrong_aggregation
+  max_correction_attempts: 1
+
+training:
+  lora_rank: 8
+  lora_alpha: 16
+  lora_dropout: 0.0
+  lora_target_modules:
+    - "q_proj"
+    - "v_proj"
+  per_device_batch_size: 1
+  gradient_accumulation_steps: 1
+  num_epochs: 1
+  # Stop after 5 gradient steps regardless of dataset size
+  max_steps: 5
+  save_steps: 5
+  eval_steps: 999999   # skip mid-training eval
+  eval_samples: 2
+  gradient_checkpointing: false
+  wandb_project: null  # disable wandb for smoke test
+
+rl:
+  num_epochs: 1
+  per_device_batch_size: 1
+  gradient_accumulation_steps: 1
+  num_candidates: 2
+  num_rollouts: 2
+  max_new_tokens: 128
+  lora_rank: 8
+  lora_alpha: 16
+  wandb_project: null
+
+inference:
+  num_candidates: 2
+  num_examples: 1
+  icl_styles:
+    - "direct"
+  max_refinement_rounds: 1
