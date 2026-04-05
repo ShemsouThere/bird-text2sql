@@ -24,6 +24,14 @@ data:
     - sql_correction
     - skeleton_extraction
 
+# dataset_builder.py currently reads task toggles from top-level `tasks`.
+tasks:
+  text2sql: true
+  schema_linking: true
+  sql_correction: true
+  chain_of_thought: false
+  skeleton_extraction: true
+
 training:
   output_dir: "./models/sft_full_no_openai"
   # Avoid unsupported precision settings on older GPUs.
