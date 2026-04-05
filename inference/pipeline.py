@@ -17,7 +17,10 @@ from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-import chromadb
+try:
+    import chromadb
+except ImportError:
+    chromadb = None
 import torch
 from rich.console import Console
 from rich.progress import (
@@ -49,6 +52,7 @@ from scripts.db_utils import (
 
 logger = logging.getLogger(__name__)
 console = Console()
+CHROMADB_AVAILABLE = chromadb is not None
 
 
 # ---------------------------------------------------------------------------
@@ -68,13 +72,19 @@ class CellValueIndex:
 
     def __init__(self, config: Dict) -> None:
         self.config = config
+        self._enabled = CHROMADB_AVAILABLE
+        self.client: Optional[Any] = None
+        self._collections: Dict[str, Any] = {}
+        if not self._enabled:
+            logger.warning("chromadb not installed; cell-value retrieval is disabled")
+            return
+
         persist_dir = config.get("inference", {}).get(
             "chroma_persist_dir", "data/chroma_persist"
         )
         self.persist_dir = Path(persist_dir)
         self.persist_dir.mkdir(parents=True, exist_ok=True)
         self.client = chromadb.PersistentClient(path=str(self.persist_dir))
-        self._collections: Dict[str, chromadb.Collection] = {}
 
     # ------------------------------------------------------------------
 
@@ -101,6 +111,9 @@ class CellValueIndex:
         originating table and column names.  The database file-stem is used
         as the ``db_id``.
         """
+        if not self._enabled or self.client is None:
+            return
+
         db_path = Path(db_path)
         db_id = db_path.stem
         col_name = self._collection_name(db_id)
@@ -196,6 +209,9 @@ class CellValueIndex:
 
         Each result dict contains keys: table, column, value, distance.
         """
+        if not self._enabled or self.client is None:
+            return []
+
         col_name = self._collection_name(db_id)
 
         if db_id not in self._collections:
@@ -228,6 +244,9 @@ class CellValueIndex:
 
     def ensure_collection(self, db_id: str, db_path: Optional[Path] = None) -> bool:
         """Load an existing collection or build it from the SQLite database."""
+        if not self._enabled or self.client is None:
+            return False
+
         if db_id in self._collections:
             return True
 
@@ -271,14 +290,20 @@ class ExampleIndex:
 
     def __init__(self, config: Dict) -> None:
         self.config = config
+        self._enabled = CHROMADB_AVAILABLE
+        self.client: Optional[Any] = None
+        self._collection: Optional[Any] = None
+        self._embedding_fn: Optional[Any] = None
+        if not self._enabled:
+            logger.warning("chromadb not installed; ICL retrieval index is disabled")
+            return
+
         persist_dir = config.get("inference", {}).get(
             "chroma_persist_dir", "data/chroma_persist"
         )
         self.persist_dir = Path(persist_dir)
         self.persist_dir.mkdir(parents=True, exist_ok=True)
         self.client = chromadb.PersistentClient(path=str(self.persist_dir))
-        self._collection: Optional[chromadb.Collection] = None
-        self._embedding_fn: Optional[Any] = None
 
     # ------------------------------------------------------------------
 
@@ -307,6 +332,9 @@ class ExampleIndex:
 
     def _get_embedding_function(self) -> Any:
         """Lazily load a sentence-transformers embedding function for ChromaDB."""
+        if not self._enabled:
+            return None
+
         if self._embedding_fn is not None:
             return self._embedding_fn
 
@@ -335,6 +363,9 @@ class ExampleIndex:
         Each example dict should have at least: question, sql, db_id.
         Optionally: evidence, schema, reasoning.
         """
+        if not self._enabled or self.client is None:
+            return
+
         # Delete existing
         try:
             self.client.delete_collection(self.COLLECTION_NAME)
@@ -397,6 +428,9 @@ class ExampleIndex:
         database.  Each result dict mirrors the stored metadata (question,
         sql, db_id, skeleton, evidence, reasoning) plus a distance score.
         """
+        if not self._enabled or self.client is None:
+            return []
+
         if self._collection is None:
             embed_fn = self._get_embedding_function()
             try:
