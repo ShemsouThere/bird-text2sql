@@ -545,6 +545,7 @@ class RLTrainingPipeline:
         """
         model.eval()
         all_responses: List[List[str]] = []
+        do_sample = temperature > 0
 
         for prompt in prompts:
             inputs = tokenizer(
@@ -555,14 +556,23 @@ class RLTrainingPipeline:
             )
             inputs = {k: v.to(model.device) for k, v in inputs.items()}
 
+            gen_kwargs = {
+                "max_new_tokens": max_new_tokens,
+                "do_sample": do_sample,
+                "top_p": 0.95,
+                "num_return_sequences": num_rollouts,
+                "pad_token_id": tokenizer.pad_token_id,
+                "eos_token_id": tokenizer.eos_token_id,
+                "use_cache": True,
+                "remove_invalid_values": True,
+                "renormalize_logits": True,
+            }
+            if do_sample:
+                gen_kwargs["temperature"] = max(temperature, 1e-4)
+
             outputs = model.generate(
                 **inputs,
-                max_new_tokens=max_new_tokens,
-                do_sample=True,
-                temperature=max(temperature, 1e-4),
-                top_p=0.95,
-                num_return_sequences=num_rollouts,
-                pad_token_id=tokenizer.pad_token_id,
+                **gen_kwargs,
             )
 
             prompt_len = inputs["input_ids"].shape[1]

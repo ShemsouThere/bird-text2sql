@@ -49,8 +49,9 @@ rl:
   per_device_batch_size: 1
   gradient_accumulation_steps: 1
   num_candidates: 2
-  num_rollouts: 2
+  num_rollouts: 1
   max_new_tokens: 128
+  temperature: 0.0
   lora_rank: 8
   lora_alpha: 16
   wandb_project: null
