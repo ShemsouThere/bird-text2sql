@@ -1,5 +1,6 @@
 #!/bin/bash
 set -e
+set -o pipefail
 
 echo "============================================"
 echo "  Bird Text-to-SQL Full Pipeline"

@@ -1421,14 +1421,73 @@ class Text2SQLPipeline:
     # ------------------------------------------------------------------
 
     def load_model(self) -> None:
-        """Load the fine-tuned Qwen + LoRA model for inference.
+        """Load the inference model.
 
-        Reads ``inference.model_path`` (path to LoRA adapter checkpoint) and
-        ``model.name`` (base model identifier) from the config.
+        ``inference.model_path`` can point to either:
+        - a merged full model directory (contains ``config.json``), or
+        - a LoRA adapter directory (contains ``adapter_config.json``).
         """
         model_name = self.model_cfg.get("name", "Qwen/Qwen2.5-Coder-7B-Instruct")
         model_path = self.inference_cfg.get("model_path", "")
         trust_remote = self.model_cfg.get("trust_remote_code", True)
+        model_path_obj = Path(model_path) if model_path else None
+        adapter_cfg = model_path_obj / "adapter_config.json" if model_path_obj else None
+        full_model_cfg = model_path_obj / "config.json" if model_path_obj else None
+
+        # Determine device and dtype
+        if torch.cuda.is_available():
+            torch_dtype = torch.bfloat16
+            device_map = "auto"
+        else:
+            torch_dtype = torch.float32
+            device_map = "cpu"
+
+        # If model_path is a merged model directory, load from it directly.
+        if model_path_obj and full_model_cfg.exists():
+            console.print(
+                f"[bold cyan]Loading merged model:[/bold cyan] {model_path_obj}"
+            )
+            self.tokenizer = AutoTokenizer.from_pretrained(
+                str(model_path_obj),
+                trust_remote_code=trust_remote,
+                padding_side="right",
+            )
+            if self.tokenizer.pad_token is None:
+                self.tokenizer.pad_token = self.tokenizer.eos_token
+                self.tokenizer.pad_token_id = self.tokenizer.eos_token_id
+
+            try:
+                self.model = AutoModelForCausalLM.from_pretrained(
+                    str(model_path_obj),
+                    torch_dtype=torch_dtype,
+                    trust_remote_code=trust_remote,
+                    device_map=device_map,
+                    attn_implementation="flash_attention_2",
+                )
+                console.print("  Loaded with [green]flash_attention_2[/green]")
+            except Exception:
+                self.model = AutoModelForCausalLM.from_pretrained(
+                    str(model_path_obj),
+                    torch_dtype=torch_dtype,
+                    trust_remote_code=trust_remote,
+                    device_map=device_map,
+                    attn_implementation="eager",
+                )
+                console.print("  Loaded with [green]eager[/green] attention")
+
+            self.model.eval()
+
+            # Wire up sub-components
+            self.reasoning_gen = ReasoningGenerator(
+                self.model, self.tokenizer, self.config
+            )
+            self.icl_gen.set_model(self.model, self.tokenizer)
+            self.refinement.set_model(self.model, self.tokenizer)
+
+            console.print(
+                "[bold green]Model loaded and ready for inference[/bold green]"
+            )
+            return
 
         console.print(f"[bold cyan]Loading base model:[/bold cyan] {model_name}")
 
@@ -1441,14 +1500,6 @@ class Text2SQLPipeline:
         if self.tokenizer.pad_token is None:
             self.tokenizer.pad_token = self.tokenizer.eos_token
             self.tokenizer.pad_token_id = self.tokenizer.eos_token_id
-
-        # Determine device and dtype
-        if torch.cuda.is_available():
-            torch_dtype = torch.bfloat16
-            device_map = "auto"
-        else:
-            torch_dtype = torch.float32
-            device_map = "cpu"
 
         # Base model
         try:
@@ -1470,14 +1521,14 @@ class Text2SQLPipeline:
             )
             console.print("  Loaded with [green]eager[/green] attention")
 
-        # Merge LoRA adapter if a checkpoint path is given
-        if model_path and Path(model_path).exists():
+        # Merge LoRA adapter if a valid adapter checkpoint path is given
+        if model_path_obj and adapter_cfg.exists():
             console.print(
-                f"[bold cyan]Loading LoRA adapter:[/bold cyan] {model_path}"
+                f"[bold cyan]Loading LoRA adapter:[/bold cyan] {model_path_obj}"
             )
             self.model = PeftModel.from_pretrained(
                 self.model,
-                model_path,
+                str(model_path_obj),
                 torch_dtype=torch_dtype,
             )
             # Merge weights for faster inference
@@ -1486,6 +1537,11 @@ class Text2SQLPipeline:
                 console.print("  LoRA adapter merged into base model")
             except Exception:
                 console.print("  Using LoRA adapter without merging")
+        elif model_path_obj and model_path_obj.exists():
+            console.print(
+                f"[yellow]Warning:[/yellow] '{model_path_obj}' exists but has neither "
+                "'adapter_config.json' nor 'config.json'. Using base model only."
+            )
 
         self.model.eval()
 
