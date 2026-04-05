@@ -155,6 +155,31 @@ class Text2SQLDataCollator:
         self.tokenizer = tokenizer
         self.max_seq_length = max_seq_length
 
+    def _normalize_input_ids(self, encoded: Any) -> List[int]:
+        """Normalize tokenizer output into a plain ``List[int]`` token sequence."""
+        # BatchEncoding is dict-like but not always a plain dict.
+        if isinstance(encoded, dict) or (
+            hasattr(encoded, "keys") and callable(getattr(encoded, "keys", None))
+        ):
+            input_ids = encoded["input_ids"]
+        else:
+            input_ids = encoded
+
+        # Tensor/ndarray -> python list
+        if hasattr(input_ids, "tolist"):
+            input_ids = input_ids.tolist()
+
+        # Single-example batched output -> unbatch
+        if isinstance(input_ids, list) and input_ids and isinstance(input_ids[0], list):
+            input_ids = input_ids[0]
+
+        if not isinstance(input_ids, list):
+            raise TypeError(
+                f"Unsupported input_ids type from tokenizer: {type(input_ids)!r}"
+            )
+
+        return [int(tok) for tok in input_ids]
+
     # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------
@@ -244,19 +269,7 @@ class Text2SQLDataCollator:
                 return_dict=True,
             )
 
-            # apply_chat_template may return a dict or a list depending
-            # on the tokenizer version. Normalise.
-            if isinstance(encoded, dict):
-                input_ids = encoded["input_ids"]
-            else:
-                input_ids = encoded  # plain list of ints
-
-            # Ensure python list
-            if hasattr(input_ids, "tolist"):
-                input_ids = input_ids.tolist()
-            if isinstance(input_ids[0], list):
-                # Batched output for a single example
-                input_ids = input_ids[0]
+            input_ids = self._normalize_input_ids(encoded)
 
             attention_mask = [1] * len(input_ids)
             labels = self._build_labels(input_ids)
