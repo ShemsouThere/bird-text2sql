@@ -31,7 +31,7 @@ from rich.progress import (
 )
 
 from scripts.db_utils import build_ddl_schema, build_light_schema, compare_results, execute_sql
-from scripts.utils import load_jsonl, save_jsonl, set_seed, setup_logging
+from scripts.utils import format_time, load_jsonl, save_jsonl, set_seed, setup_logging
 
 logger = logging.getLogger(__name__)
 console = Console()
@@ -1431,11 +1431,14 @@ class MultitaskDatasetBuilder:
 
                 for task_name, builder in self.task_builders:
                     task_count = 0
+                    task_total = len(samples)
+                    task_log_interval = max(1, task_total // 10)
+                    task_start_time = time.time()
                     task_id = progress.add_task(
                         f"  {task_name}", total=len(samples)
                     )
 
-                    for sample in samples:
+                    for sample_idx, sample in enumerate(samples, start=1):
                         try:
                             built = builder.build(sample, self.config)
                             if built:
@@ -1451,6 +1454,23 @@ class MultitaskDatasetBuilder:
 
                         progress.advance(task_id)
                         progress.advance(overall_task)
+
+                        if sample_idx % task_log_interval == 0 or sample_idx == task_total:
+                            elapsed = time.time() - task_start_time
+                            rate = sample_idx / elapsed if elapsed > 0 else 0.0
+                            eta_seconds = (
+                                (task_total - sample_idx) / rate if rate > 0 else 0.0
+                            )
+                            self.logger.info(
+                                "Task '%s' progress: %d/%d (%.1f%%) | generated=%d | elapsed=%s | ETA=%s",
+                                task_name,
+                                sample_idx,
+                                task_total,
+                                100.0 * sample_idx / task_total if task_total else 100.0,
+                                task_count,
+                                format_time(elapsed),
+                                format_time(eta_seconds),
+                            )
 
                     stats[task_name] = task_count
                     self.logger.info(

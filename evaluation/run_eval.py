@@ -8,7 +8,7 @@ from pathlib import Path
 from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TimeRemainingColumn
 
-from scripts.utils import load_config, setup_logging, save_jsonl, load_jsonl, set_seed
+from scripts.utils import format_time, load_config, setup_logging, save_jsonl, load_jsonl, set_seed
 from evaluation.evaluator import BIRDEvaluator, PredictionLogger
 
 console = Console()
@@ -57,6 +57,8 @@ def run_evaluation(config: dict):
 
     predictions = []
     start_time = time.time()
+    total_samples = len(dev_data)
+    log_interval = max(1, total_samples // 10) if total_samples else 1
 
     with Progress(
         SpinnerColumn(),
@@ -67,7 +69,7 @@ def run_evaluation(config: dict):
     ) as progress:
         task = progress.add_task("Evaluating...", total=len(dev_data))
 
-        for sample in dev_data:
+        for sample_idx, sample in enumerate(dev_data, start=1):
             question = sample.get("question", "")
             db_id = sample.get("db_id", "")
             evidence = sample.get("evidence", "")
@@ -98,6 +100,20 @@ def run_evaluation(config: dict):
             predictions.append(pred)
             pred_logger.log({**pred, "question": question, "gold_sql": sample.get("SQL", "")})
             progress.advance(task)
+
+            if sample_idx % log_interval == 0 or sample_idx == total_samples:
+                elapsed = time.time() - start_time
+                avg_seconds = elapsed / sample_idx if sample_idx else 0.0
+                eta_seconds = avg_seconds * (total_samples - sample_idx)
+                logger.info(
+                    "Evaluation progress: %d/%d (%.1f%%) | avg=%.2fs/sample | elapsed=%s | ETA=%s",
+                    sample_idx,
+                    total_samples,
+                    100.0 * sample_idx / total_samples if total_samples else 100.0,
+                    avg_seconds,
+                    format_time(elapsed),
+                    format_time(eta_seconds),
+                )
 
     elapsed = time.time() - start_time
     console.print(f"\n[bold]Inference completed in {elapsed:.1f}s ({elapsed/max(len(predictions),1):.2f}s/sample)[/bold]")

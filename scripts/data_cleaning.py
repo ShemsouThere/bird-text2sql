@@ -24,7 +24,7 @@ from rich.progress import (
 from rich.table import Table
 
 from scripts.db_utils import build_ddl_schema, execute_sql, get_all_tables, resolve_db_path
-from scripts.utils import load_jsonl, save_jsonl, setup_logging
+from scripts.utils import format_time, load_jsonl, save_jsonl, setup_logging
 
 logger = logging.getLogger(__name__)
 console = Console()
@@ -169,6 +169,9 @@ class ExecutionValidator:
         """
         validated: List[Dict[str, Any]] = []
         total = len(samples)
+        log_interval = max(1, total // 10) if total else 1
+        completed = 0
+        start_time = time.time()
 
         with Progress(
             SpinnerColumn(),
@@ -186,17 +189,49 @@ class ExecutionValidator:
                         for i, sample in enumerate(samples)
                     }
                     for future in as_completed(future_to_idx):
+                        completed += 1
                         try:
                             result = future.result()
                         except Exception as exc:
                             logger.debug("Execution worker error: %s", exc)
                             progress.advance(task_id)
+                            if completed % log_interval == 0 or completed == total:
+                                elapsed = time.time() - start_time
+                                rate = completed / elapsed if elapsed > 0 else 0.0
+                                eta_seconds = (
+                                    (total - completed) / rate if rate > 0 else 0.0
+                                )
+                                logger.info(
+                                    "Execution validation progress: %d/%d (%.1f%%) | passed=%d | elapsed=%s | ETA=%s",
+                                    completed,
+                                    total,
+                                    100.0 * completed / total if total else 100.0,
+                                    len(validated),
+                                    format_time(elapsed),
+                                    format_time(eta_seconds),
+                                )
                             continue
 
                         if result.get("exec_valid", False):
                             validated.append(result)
 
                         progress.advance(task_id)
+
+                        if completed % log_interval == 0 or completed == total:
+                            elapsed = time.time() - start_time
+                            rate = completed / elapsed if elapsed > 0 else 0.0
+                            eta_seconds = (
+                                (total - completed) / rate if rate > 0 else 0.0
+                            )
+                            logger.info(
+                                "Execution validation progress: %d/%d (%.1f%%) | passed=%d | elapsed=%s | ETA=%s",
+                                completed,
+                                total,
+                                100.0 * completed / total if total else 100.0,
+                                len(validated),
+                                format_time(elapsed),
+                                format_time(eta_seconds),
+                            )
 
             except KeyboardInterrupt:
                 logger.warning(
@@ -274,6 +309,8 @@ class SemanticValidator:
         """
         validated: List[Dict[str, Any]] = []
         total = len(samples)
+        log_interval = max(1, total // 10) if total else 1
+        start_time = time.time()
 
         with Progress(
             SpinnerColumn(),
@@ -285,13 +322,29 @@ class SemanticValidator:
             task_id = progress.add_task("Semantic validation", total=total)
 
             try:
-                for sample in samples:
+                for sample_idx, sample in enumerate(samples, start=1):
                     result = self._validate_one(sample)
                     if result.get("semantic_valid", False):
                         confidence = result.get("semantic_confidence", 0.0)
                         if confidence >= self.confidence_threshold:
                             validated.append(result)
                     progress.advance(task_id)
+
+                    if sample_idx % log_interval == 0 or sample_idx == total:
+                        elapsed = time.time() - start_time
+                        rate = sample_idx / elapsed if elapsed > 0 else 0.0
+                        eta_seconds = (
+                            (total - sample_idx) / rate if rate > 0 else 0.0
+                        )
+                        logger.info(
+                            "Semantic validation progress: %d/%d (%.1f%%) | passed=%d | elapsed=%s | ETA=%s",
+                            sample_idx,
+                            total,
+                            100.0 * sample_idx / total if total else 100.0,
+                            len(validated),
+                            format_time(elapsed),
+                            format_time(eta_seconds),
+                        )
 
             except KeyboardInterrupt:
                 logger.warning(
