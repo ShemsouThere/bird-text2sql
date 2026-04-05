@@ -5,7 +5,6 @@ peft
 trl
 accelerate
 bitsandbytes
-vllm
 sentence-transformers
 chromadb
 sqlglot

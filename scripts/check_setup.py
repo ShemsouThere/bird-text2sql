@@ -13,7 +13,7 @@ console = Console()
 
 REQUIRED_PACKAGES = [
     "torch", "transformers", "datasets", "peft", "trl", "accelerate",
-    "bitsandbytes", "vllm", "sentence_transformers", "chromadb", "sqlglot",
+    "bitsandbytes", "sentence_transformers", "chromadb", "sqlglot",
     "openai", "wandb", "rich", "typer", "dotenv", "numpy", "pandas",
     "tqdm", "fastapi", "uvicorn", "einops", "scipy", "sklearn",
 ]
