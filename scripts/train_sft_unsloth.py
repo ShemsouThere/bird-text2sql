@@ -8,6 +8,7 @@ training:
 """
 
 import random
+import sys
 import time
 from pathlib import Path
 from typing import Any, Dict, List
@@ -15,6 +16,9 @@ from typing import Any, Dict, List
 import torch
 from datasets import Dataset
 from rich.console import Console
+
+# Ensure project root is importable when running this file directly.
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from scripts.utils import load_jsonl, set_seed, setup_logging, format_time
 
