@@ -7,6 +7,7 @@ training:
   backend: "unsloth"
 """
 
+import inspect
 import random
 import sys
 import time
@@ -183,7 +184,7 @@ def train_unsloth(config: Dict[str, Any]) -> None:
     if use_bf16:
         use_fp16 = False
 
-    sft_args = SFTConfig(
+    sft_kwargs = dict(
         output_dir=str(output_dir),
         num_train_epochs=float(training_cfg.get("num_epochs", 1)),
         max_steps=int(training_cfg.get("max_steps", -1)),
@@ -201,12 +202,20 @@ def train_unsloth(config: Dict[str, Any]) -> None:
         save_strategy=str(training_cfg.get("save_strategy", "steps")),
         save_steps=int(training_cfg.get("save_steps", 1000)),
         save_total_limit=int(training_cfg.get("save_total_limit", 2)),
-        evaluation_strategy=evaluation_strategy,
-        eval_steps=int(training_cfg.get("eval_steps", 1000)),
         report_to="wandb" if training_cfg.get("wandb_project") else "none",
         run_name=str(training_cfg.get("wandb_run_name", "sft-unsloth")),
         seed=int(training_cfg.get("seed", 42)),
     )
+    sft_sig = inspect.signature(SFTConfig.__init__).parameters
+    if "evaluation_strategy" in sft_sig:
+        sft_kwargs["evaluation_strategy"] = evaluation_strategy
+    elif "eval_strategy" in sft_sig:
+        sft_kwargs["eval_strategy"] = evaluation_strategy
+
+    if "eval_steps" in sft_sig:
+        sft_kwargs["eval_steps"] = int(training_cfg.get("eval_steps", 1000))
+
+    sft_args = SFTConfig(**sft_kwargs)
 
     trainer = SFTTrainer(
         model=model,
