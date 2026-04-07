@@ -1,0 +1,39 @@
+# Fast SFT preset using Unsloth backend on BIRD text2sql-only samples.
+# Requires: pip install unsloth trl
+
+model:
+  name: "Qwen/Qwen2.5-Coder-7B-Instruct"
+  max_seq_length: 2048
+  load_in_4bit: true
+  torch_dtype: "float16"
+
+data:
+  multitask_dir: "./data/multitask_full_no_openai"
+
+training:
+  backend: "unsloth"
+  output_dir: "./models/sft_bird_only_unsloth"
+  wandb_project: "bird-text2sql"
+  wandb_run_name: "sft-bird-only-unsloth"
+
+  include_task_types:
+    - text2sql
+  include_schema_types:
+    - light
+
+  per_device_batch_size: 1
+  gradient_accumulation_steps: 16
+  learning_rate: 2.0e-5
+  warmup_ratio: 0.03
+  max_grad_norm: 1.0
+  gradient_checkpointing: true
+  bf16: false
+  fp16: true
+  lora_rank: 32
+  lora_alpha: 64
+
+  # Unsloth path defaults to no periodic eval for speed unless enabled.
+  evaluate_during_train: false
+  save_strategy: "steps"
+  save_steps: 1000
+  save_total_limit: 2

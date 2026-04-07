@@ -7,6 +7,7 @@ and checkpoint management.
 
 import json
 import os
+import random
 import time
 import traceback
 from pathlib import Path
@@ -490,6 +491,48 @@ class SFTTrainingPipeline:
 
         self.logger.info(f"Valid records: {len(valid_records):,} / {len(records):,}")
 
+        # Optional task-level filtering (useful for "bird-only"/text2sql-only runs)
+        include_task_types = self.training_cfg.get("include_task_types")
+        if include_task_types:
+            allowed_tasks = {str(t).strip() for t in include_task_types}
+            before = len(valid_records)
+            valid_records = [
+                rec for rec in valid_records
+                if rec.get("task_type") in allowed_tasks
+            ]
+            self.logger.info(
+                "Applied include_task_types=%s: %d -> %d records",
+                sorted(allowed_tasks),
+                before,
+                len(valid_records),
+            )
+
+        include_schema_types = self.training_cfg.get("include_schema_types")
+        if include_schema_types:
+            allowed_schema_types = {str(t).strip() for t in include_schema_types}
+            before = len(valid_records)
+            valid_records = [
+                rec for rec in valid_records
+                if rec.get("schema_type") in allowed_schema_types
+            ]
+            self.logger.info(
+                "Applied include_schema_types=%s: %d -> %d records",
+                sorted(allowed_schema_types),
+                before,
+                len(valid_records),
+            )
+
+        # Optional cap for fast iteration.
+        max_train_samples = self.training_cfg.get("max_train_samples")
+        if max_train_samples is not None:
+            cap = int(max_train_samples)
+            if cap > 0 and len(valid_records) > cap:
+                seed = int(self.training_cfg.get("seed", 42))
+                rng = random.Random(seed)
+                rng.shuffle(valid_records)
+                valid_records = valid_records[:cap]
+                self.logger.info("Applied max_train_samples=%d", cap)
+
         dataset = Dataset.from_list(valid_records)
         return dataset
 
@@ -574,6 +617,7 @@ class SFTTrainingPipeline:
             save_total_limit=self.training_cfg.get("save_total_limit", 3),
             logging_dir=str(self.log_dir),
             logging_steps=1,
+            logging_nan_inf_filter=bool(self.training_cfg.get("logging_nan_inf_filter", True)),
             report_to="wandb" if self.training_cfg.get("wandb_project") else "none",
             run_name=self.training_cfg.get("wandb_run_name", "sft-text2sql"),
             seed=self.training_cfg.get("seed", 42),

@@ -90,9 +90,14 @@ def train_sft(
 ):
     """Run supervised fine-tuning."""
     cfg = _load_config(config, preset)
-    from scripts.train_sft import SFTTrainingPipeline
-    pipeline = SFTTrainingPipeline(cfg)
-    pipeline.train()
+    backend = str(cfg.get("training", {}).get("backend", "hf")).lower()
+    if backend == "unsloth":
+        from scripts.train_sft_unsloth import train_unsloth
+        train_unsloth(cfg)
+    else:
+        from scripts.train_sft import SFTTrainingPipeline
+        pipeline = SFTTrainingPipeline(cfg)
+        pipeline.train()
 
 
 @app.command()

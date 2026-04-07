@@ -1,0 +1,42 @@
+# Fast, stable SFT preset on existing multitask data, filtered to BIRD text2sql only.
+# Uses the standard HF trainer backend.
+
+model:
+  name: "Qwen/Qwen2.5-Coder-7B-Instruct"
+  max_seq_length: 2048
+  load_in_4bit: true
+  torch_dtype: "float16"
+  bnb_4bit_compute_dtype: "float16"
+
+data:
+  multitask_dir: "./data/multitask_full_no_openai"
+
+training:
+  backend: "hf"
+  output_dir: "./models/sft_bird_only_fast"
+  wandb_project: "bird-text2sql"
+  wandb_run_name: "sft-bird-only-fast"
+
+  # Keep only primary BIRD objective and a single schema representation.
+  include_task_types:
+    - text2sql
+  include_schema_types:
+    - light
+
+  # Stability + speed.
+  per_device_batch_size: 1
+  gradient_accumulation_steps: 16
+  learning_rate: 2.0e-5
+  warmup_ratio: 0.03
+  max_grad_norm: 1.0
+  gradient_checkpointing: true
+  bf16: false
+  tf32: false
+  lora_rank: 32
+  lora_alpha: 64
+
+  # Reduce overhead during training.
+  eval_steps: 2000
+  eval_samples: 20
+  save_steps: 1000
+  logging_nan_inf_filter: true
