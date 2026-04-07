@@ -37,6 +37,10 @@ training:
   # Avoid unsupported precision settings on older GPUs.
   bf16: false
   tf32: false
+  # OOM-safe defaults for 32GB GPUs on long-context SFT.
+  per_device_batch_size: 1
+  gradient_accumulation_steps: 16
+  gradient_checkpointing: true
   # Keep experiment tracking enabled.
   wandb_project: "bird-text2sql"
   wandb_run_name: "full-no-openai-sft"
