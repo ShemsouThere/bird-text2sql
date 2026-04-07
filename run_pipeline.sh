@@ -120,6 +120,52 @@ run_step() {
     fi
 }
 
+# Override run_step with robust pipeline exit handling.
+# This avoids false failures when tee/pipes return non-zero while python succeeds.
+run_step() {
+    local step_num=$1
+    local step_name=$2
+    local total=${#STEPS[@]}
+
+    echo ""
+    echo -e "${GREEN}[$step_num/$total] Running: $step_name${NC}"
+    echo "$(date): Starting $step_name" >> "$PIPELINE_LOG"
+
+    local start_time=$(date +%s)
+
+    set +e
+    python main.py "$step_name" --config "$CONFIG" $PRESET_FLAG 2>&1 | tee -a "$PIPELINE_LOG"
+    local pipe_status=("${PIPESTATUS[@]}")
+    set -e
+
+    local step_exit_code="${pipe_status[0]}"
+    local tee_exit_code="${pipe_status[1]:-0}"
+
+    if [ "$step_exit_code" -eq 0 ]; then
+        local end_time=$(date +%s)
+        local elapsed=$((end_time - start_time))
+        echo -e "${GREEN}  [OK] $step_name completed in ${elapsed}s${NC}"
+        echo "$(date): Completed $step_name in ${elapsed}s" >> "$PIPELINE_LOG"
+        if [ "$tee_exit_code" -ne 0 ]; then
+            echo -e "${YELLOW}  Warning: tee exited with code $tee_exit_code (pipeline logs may be incomplete).${NC}"
+            echo "$(date): tee warning on $step_name (code $tee_exit_code)" >> "$PIPELINE_LOG"
+        fi
+    else
+        local exit_code="$step_exit_code"
+        echo -e "${RED}  [X] $step_name failed with exit code $exit_code${NC}"
+        echo "$(date): FAILED $step_name with exit code $exit_code" >> "$PIPELINE_LOG"
+
+        if [ "$step_name" = "check-setup" ]; then
+            echo -e "${YELLOW}  Setup check failed. Fix issues above before continuing.${NC}"
+            echo -e "${YELLOW}  You can skip this check with: $0 --skip-to prepare-schemas${NC}"
+            exit 1
+        fi
+
+        echo -e "${YELLOW}  To resume from this step: $0 --skip-to $step_name${NC}"
+        exit "$exit_code"
+    fi
+}
+
 # Run pipeline
 PIPELINE_START=$(date +%s)
 echo "Pipeline started at $(date)" > "$PIPELINE_LOG"
