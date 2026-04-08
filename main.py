@@ -126,6 +126,27 @@ def merge_model(
 
 
 @app.command()
+def export_gguf(
+    config: str = typer.Option("configs/config.yaml", "--config", "-c"),
+    preset: Optional[str] = typer.Option(None, "--preset", "-p"),
+    model_path: Optional[str] = typer.Option(None, "--model-path", help="Source checkpoint/model directory"),
+    output_dir: Optional[str] = typer.Option("./models/gguf", "--output-dir", help="Output directory for GGUF files"),
+    quantization: str = typer.Option("q4_k_m", "--quantization", help="GGUF quantization method"),
+    save_merged_16bit: bool = typer.Option(False, "--save-merged-16bit", help="Also save merged 16-bit HF model"),
+):
+    """Export a fine-tuned model checkpoint to GGUF format."""
+    cfg = _load_config(config, preset)
+    from scripts.export_gguf import export_gguf as _export_gguf
+    _export_gguf(
+        cfg,
+        model_path=model_path,
+        output_dir=output_dir,
+        quantization=quantization,
+        save_merged_16bit=save_merged_16bit,
+    )
+
+
+@app.command()
 def evaluate(
     config: str = typer.Option("configs/config.yaml", "--config", "-c"),
     preset: Optional[str] = typer.Option(None, "--preset", "-p"),

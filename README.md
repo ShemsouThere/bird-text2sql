@@ -273,7 +273,22 @@ python main.py merge-model --output models/my_merged_model
 
 Merges the LoRA adapter weights into the base model and saves the full merged model to `models/final/` (or a custom path). The merged model can be loaded without the `peft` library.
 
-### 9. Evaluate
+### 9. Export GGUF
+
+```bash
+# Export configured model/checkpoint to GGUF (default q4_k_m)
+python main.py export-gguf --preset configs/preset_sft_bird_only_unsloth.yaml
+
+# Export from a specific checkpoint directory
+python main.py export-gguf \
+  --model-path models/sft_bird_only_unsloth/final_checkpoint \
+  --output-dir models/gguf_bird_only \
+  --quantization q5_k_m
+```
+
+This command uses Unsloth to produce GGUF files suitable for `llama.cpp` / Ollama workflows.
+
+### 10. Evaluate
 
 ```bash
 python main.py evaluate
